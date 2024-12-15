@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.accolite'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+// Task to generate test classes for public methods
+task generateTests {
+    group = 'verification'
+    description = 'Generates test classes for public methods.'
+
+    doLast {
+        def srcDir = file('src/main/java')
+        def testDir = file('src/test/java')
+        def classDir = file('build/classes/java/main')
+        def classLoader = new URLClassLoader([classDir.toURI().toURL()] as URL[])
+
+        // Iterate through all Java files in the source directory
+        srcDir.eachFileRecurse { file ->
+            if (file.name.endsWith('.java')) {
+                def className = file.path
+                        .replace(srcDir.path + File.separator, '')
+                        .replace(File.separator, '.')
+                        .replace('.java', '')
+
+                try {
+                    def clazz = Class.forName(className, true, classLoader)
+                    generateTestFile(clazz, testDir)
+                } catch (ClassNotFoundException e) {
+                    println "Class not found: ${className}"
+                }
+            }
+        }
+    }
+}
+
+// Function to generate a test file for a given class
+def generateTestFile(Class clazz, File testDir) {
+    def packageName = clazz.packageName
+    def className = clazz.simpleName
+    def testFilePath = "${testDir}/${packageName.replace('.', '/')}/${className}Test.java"
+    def testFile = new File(testFilePath)
+
+    if (!testFile.exists()) {
+        testFile.parentFile.mkdirs()
+        testFile.withWriter { writer ->
+            writer << "package ${packageName};\n\n"
+            writer << "import org.junit.jupiter.api.Test;\n\n"
+            writer << "import static org.junit.jupiter.api.Assertions.*;\n\n"
+            writer << "class ${className}Test {\n\n"
+
+            // Generate test methods for each public method in the class
+            clazz.declaredMethods.each { method ->
+                if (java.lang.reflect.Modifier.isPublic(method.modifiers)) {
+                    writer << "    @Test\n"
+                    writer << "    void test${method.name.capitalize()}() {\n"
+                    writer << "        // TODO: Implement test logic for ${method.name}()\n"
+                    writer << "    }\n\n"
+                }
+            }
+            writer << "}\n"
+        }
+        println "Generated test file for ${className} at ${testFilePath}"
+    } else {
+        println "Test file for ${className} already exists."
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
